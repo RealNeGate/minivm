@@ -1,7 +1,7 @@
 
 #include "./cffi.h"
 
-#include "../../ffi/include/ffi.h"
+#include "../ffi/include/ffi.h"
 #include "./tag.h"
 
 #if defined(_WIN32)

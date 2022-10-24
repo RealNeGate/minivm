@@ -38,3 +38,4 @@ out.*
 perf.*
 scosmopolitan.h
 target
+*.lib
