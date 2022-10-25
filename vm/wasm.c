@@ -230,7 +230,8 @@ enum vm_wasm_opcode_enum_t {
     VM_WASM_OPCODE_F64_REINTERPRET_I64 = 0XBF,
 };
 
-enum vm_wasm_memory_immediate_enum_t {
+enum vm_wasm_memory_immediate_id_enum_t {
+    VM_WASM_IMMEDIATE_NONE,
     VM_WASM_IMMEDIATE_BLOCK_TYPE,
     VM_WASM_IMMEDIATE_VARUINT1,
     VM_WASM_IMMEDIATE_VARUINT32,
@@ -244,7 +245,7 @@ enum vm_wasm_memory_immediate_enum_t {
     VM_WASM_IMMEDIATE_MEMORY_IMMEDIATE,
 };
 
-vm_wasm_immedate_t vm_wasm_immediates[] = {
+vm_wasm_immediate_id_t vm_wasm_immediates[] = {
     [VM_WASM_OPCODE_BLOCK] = VM_WASM_IMMEDIATE_BLOCK_TYPE,
     [VM_WASM_OPCODE_LOOP] = VM_WASM_IMMEDIATE_BLOCK_TYPE,
     [VM_WASM_OPCODE_IF] = VM_WASM_IMMEDIATE_BLOCK_TYPE,
@@ -339,12 +340,20 @@ uint8_t vm_wasm_parse_varuint1(FILE *in) {
     return vm_wasm_parse_byte(in);
 }
 
+int32_t vm_wasm_parse_varint32(FILE *in) {
+    return (int32_t)vm_wasm_parse_sleb(in);
+}
+
+int64_t vm_wasm_parse_varint64(FILE *in) {
+    return (int64_t)vm_wasm_parse_sleb(in);
+}
+
 int32_t vm_wasm_parse_varuint32(FILE *in) {
-    return (uint32_t)vm_wasm_parse_sleb(in);
+    return (uint32_t)vm_wasm_parse_uleb(in);
 }
 
 int64_t vm_wasm_parse_varuint64(FILE *in) {
-    return (uint64_t)vm_wasm_parse_sleb(in);
+    return (uint64_t)vm_wasm_parse_uleb(in);
 }
 
 uint32_t vm_wasm_parse_uint32(FILE *in) {
@@ -659,12 +668,83 @@ vm_wasm_section_data_t vm_wasm_parse_section_data(FILE *in) {
     };
 }
 
+vm_wasm_instr_immediate_t vm_wasm_parse_instr_immediate(FILE *in, vm_wasm_immediate_id_t id) {
+    if (id == VM_WASM_IMMEDIATE_BLOCK_TYPE) {
+        return (vm_wasm_instr_immediate_t) {
+            .id = VM_WASM_IMMEDIATE_BLOCK_TYPE,
+            .block_type = vm_wasm_parse_block_type(in),
+        };
+    }
+    if (id == VM_WASM_IMMEDIATE_VARUINT1) {
+        return (vm_wasm_instr_immediate_t) {
+            .id = VM_WASM_IMMEDIATE_VARUINT1,
+            .varuint1 = vm_wasm_parse_varuint1(in),
+        };
+    }
+    if (id == VM_WASM_IMMEDIATE_VARUINT32) {
+        return (vm_wasm_instr_immediate_t) {
+            .id = VM_WASM_IMMEDIATE_VARUINT32,
+            .varuint32 = vm_wasm_parse_varuint32(in),
+        };
+    }
+    if (id == VM_WASM_IMMEDIATE_VARUINT64) {
+        return (vm_wasm_instr_immediate_t) {
+            .id = VM_WASM_IMMEDIATE_VARUINT64,
+            .varuint64 = vm_wasm_parse_varuint64(in),
+        };
+    }
+    if (id == VM_WASM_IMMEDIATE_VARINT32) {
+        return (vm_wasm_instr_immediate_t) {
+            .id = VM_WASM_IMMEDIATE_VARINT32,
+            .varint32 = vm_wasm_parse_varint32(in),
+        };
+    }
+    if (id == VM_WASM_IMMEDIATE_VARINT64) {
+        return (vm_wasm_instr_immediate_t) {
+            .id = VM_WASM_IMMEDIATE_VARINT64,
+            .varint64 = vm_wasm_parse_varint64(in),
+        };
+    }
+    if (id == VM_WASM_IMMEDIATE_UINT32) {
+        return (vm_wasm_instr_immediate_t) {
+            .id = VM_WASM_IMMEDIATE_UINT32,
+            .uint32 = vm_wasm_parse_uint32(in),
+        };
+    }
+    if (id == VM_WASM_IMMEDIATE_UINT64) {
+        return (vm_wasm_instr_immediate_t) {
+            .id = VM_WASM_IMMEDIATE_UINT64,
+            .uint64 = vm_wasm_parse_uint64(in),
+        };
+    }
+    if (id == VM_WASM_IMMEDIATE_BR_TABLE) {
+        return (vm_wasm_instr_immediate_t) {
+            .id = VM_WASM_IMMEDIATE_BR_TABLE,
+            .br_table = vm_wasm_parse_br_table(in),
+        };
+    }
+    if (id == VM_WASM_IMMEDIATE_CALL_INDIRECT) {
+        return (vm_wasm_instr_immediate_t) {
+            .id = VM_WASM_IMMEDIATE_CALL_INDIRECT,
+            .call_indirect = vm_wasm_parse_call_indirect(in),
+        };
+    }
+    if (id == VM_WASM_IMMEDIATE_MEMORY_IMMEDIATE) {
+        return (vm_wasm_instr_immediate_t) {
+            .id = VM_WASM_IMMEDIATE_MEMORY_IMMEDIATE,
+            .memory_immediate = vm_wasm_parse_memory_immediate(in),
+        };
+    }
+    __builtin_trap();
+}
+
 vm_wasm_instr_t vm_wasm_parse_instr(FILE *in) {
+    vm_wasm_opcode_t opcode = vm_wasm_parse_sleb(in);
+    vm_wasm_immediate_id_t immediate_id = vm_wasm_immediates[opcode];
+    vm_wasm_instr_immediate_t immediate = vm_wasm_parse_instr_immediate(in, immediate_id);
     return (vm_wasm_instr_t){
-        // .name = name,
-        // .return_type = return_type,
-        // .has_immediate = has_immediate,
-        // .immediate = immediate,
+        .opcode = opcode,
+        .immediate = immediate,
     };
 }
 

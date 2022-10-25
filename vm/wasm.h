@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include "./lib.h"
 
-typedef uint8_t vm_wasm_immedate_t;
+typedef uint8_t vm_wasm_immediate_id_t;
 typedef uint8_t vm_wasm_opcode_t;
 typedef uint8_t vm_wasm_section_id_t;
 typedef uint8_t vm_wasm_lang_type_t;
@@ -97,6 +97,9 @@ typedef struct vm_wasm_section_data_entry_t vm_wasm_section_data_entry_t;
 
 struct vm_wasm_section_data_t;
 typedef struct vm_wasm_section_data_t vm_wasm_section_data_t;
+
+struct vm_wasm_instr_immediate_t;
+typedef struct vm_wasm_instr_immediate_t vm_wasm_instr_immediate_t;
 
 struct vm_wasm_instr_t;
 typedef struct vm_wasm_instr_t vm_wasm_instr_t;
@@ -233,7 +236,26 @@ struct vm_wasm_section_memory_t {
     vm_wasm_type_memory_t *entries;
 };
 
+struct vm_wasm_instr_immediate_t {
+    union {
+        uint8_t varuint1;
+        uint32_t varuint32;
+        uint64_t varuint64;
+        uint32_t varint32;
+        uint64_t varint64;
+        uint32_t uint32;
+        uint64_t uint64;
+        vm_wasm_lang_type_t block_type;
+        vm_wasm_br_table_t br_table;
+        vm_wasm_call_indirect_t call_indirect;
+        vm_wasm_memory_immediate_t memory_immediate;
+    };
+    vm_wasm_immediate_id_t id;
+};
+
 struct vm_wasm_instr_t {
+    vm_wasm_opcode_t opcode;
+    vm_wasm_instr_immediate_t immediate;
 };
 
 struct vm_wasm_section_global_entry_t {
@@ -291,6 +313,24 @@ struct vm_wasm_section_data_t {
     vm_wasm_section_data_entry_t *entries;
 };
 
+struct vm_wasm_section_t {
+    union {
+        vm_wasm_section_custom_t custom_section;
+        vm_wasm_section_type_t type_section;
+        vm_wasm_section_import_t import_section;
+        vm_wasm_section_function_t function_section;
+        vm_wasm_section_table_t table_section;
+        vm_wasm_section_memory_t memory_section;
+        vm_wasm_section_global_t global_section;
+        vm_wasm_section_export_t export_section;
+        vm_wasm_section_start_t start_section;
+        vm_wasm_section_element_t element_section;
+        vm_wasm_section_code_t code_section;
+        vm_wasm_section_data_t data_section;
+    };
+    vm_wasm_section_id_t id;
+};
+
 struct vm_wasm_module_t {
 
 };
@@ -325,6 +365,7 @@ vm_wasm_section_start_t vm_wasm_parse_section_start(FILE *in);
 vm_wasm_section_element_t vm_wasm_parse_section_element(FILE *in);
 vm_wasm_section_code_t vm_wasm_parse_section_code(FILE *in);
 vm_wasm_section_data_t vm_wasm_parse_section_data(FILE *in);
+vm_wasm_instr_immediate_t vm_wasm_parse_instr_immediate(FILE *in, vm_wasm_immediate_id_t id);
 vm_wasm_instr_t vm_wasm_parse_instr(FILE *in);
 vm_wasm_module_t vm_wasm_parse_module(FILE *in);
 
