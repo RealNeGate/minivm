@@ -2,6 +2,12 @@
 #include <stdint.h>
 #include "./lib.h"
 
+typedef uint8_t vm_wasm_immedate_t;
+typedef uint8_t vm_wasm_opcode_t;
+typedef uint8_t vm_wasm_section_id_t;
+typedef uint8_t vm_wasm_lang_type_t;
+typedef uint8_t vm_wasm_external_kind_t;
+
 struct vm_wasm_preamble_t;
 typedef struct vm_wasm_preamble_t vm_wasm_preamble_t;
 
@@ -86,6 +92,9 @@ typedef struct vm_wasm_section_code_entry_t vm_wasm_section_code_entry_t;
 struct vm_wasm_section_code_t;
 typedef struct vm_wasm_section_code_t vm_wasm_section_code_t;
 
+struct vm_wasm_section_data_entry_t;
+typedef struct vm_wasm_section_data_entry_t vm_wasm_section_data_entry_t;
+
 struct vm_wasm_section_data_t;
 typedef struct vm_wasm_section_data_t vm_wasm_section_data_t;
 
@@ -102,9 +111,8 @@ struct vm_wasm_preamble_t {
 };
 
 struct vm_wasm_section_header_t {
-    uint8_t id;
+    vm_wasm_section_id_t id;
     uint64_t size;
-    const char *name;
 };
 
 struct vm_wasm_br_table_t {
@@ -128,7 +136,7 @@ struct vm_wasm_type_function_t {
 };
 
 struct vm_wasm_type_global_t {
-    const char *content_type;
+    vm_wasm_external_kind_t content_type;
     uint8_t mutability;
 };
 
@@ -139,7 +147,7 @@ struct vm_wasm_type_memory_t {
 };
 
 struct vm_wasm_type_table_t {
-    const char *element_type;
+    vm_wasm_lang_type_t element_type;
     vm_wasm_type_memory_t limits;
 };
 
@@ -150,7 +158,7 @@ struct vm_wasm_type_t {
         vm_wasm_type_memory_t memory; 
         vm_wasm_type_table_t table; 
     };
-    const char *tag;
+    vm_wasm_lang_type_t tag;
 };
 
 // enum {
@@ -173,11 +181,12 @@ struct vm_wasm_section_custom_t {
 };
 
 struct vm_wasm_section_type_entry_t {
-    const char *form;
     uint64_t num_params;
-    const char **params;
+    vm_wasm_lang_type_t *params;
     uint64_t num_returns;
-    const char *return_type;
+    vm_wasm_lang_type_t type;
+    vm_wasm_lang_type_t return_type;
+    bool has_return_type;
 };
 
 struct vm_wasm_section_type_t {
@@ -188,7 +197,7 @@ struct vm_wasm_section_type_t {
 struct vm_wasm_section_import_entry_t {
     const char *module_str;
     const char *field_str;
-    const char *kind;
+    vm_wasm_external_kind_t kind;
     vm_wasm_type_t type;
 };
 
@@ -248,9 +257,14 @@ struct vm_wasm_section_element_entry_t {
     uint64_t *elems;
 };
 
+struct vm_wasm_section_element_t {
+    uint64_t num_entries;
+    vm_wasm_section_element_entry_t *entries;
+};
+
 struct vm_wasm_section_code_entry_local_t {
     uint64_t count;
-    const char *type;
+    vm_wasm_lang_type_t type;
 };
 
 struct vm_wasm_section_code_entry_t {
@@ -265,18 +279,22 @@ struct vm_wasm_section_code_t {
     vm_wasm_section_code_entry_t *entries;
 };
 
-struct vm_wasm_section_data_t {
+struct vm_wasm_section_data_entry_t {
+    uint64_t index;
+    vm_wasm_instr_t offset;
+    uint64_t size;
+    uint8_t *data;
+};
 
+struct vm_wasm_section_data_t {
+    uint64_t num_entries;
+    vm_wasm_section_data_entry_t *entries;
 };
 
 struct vm_wasm_module_t {
 
 };
 
-extern const char *const vm_wasm_lang_types[];
-extern const char *const vm_wasm_external_kind[];
-extern const char *const vm_wasm_section_ids[];
-extern const char *vm_wasm_opcodes[];
 uint64_t vm_wasm_parse_uleb(FILE *in);
 int64_t vm_wasm_parse_sleb(FILE *in);
 uint8_t vm_wasm_parse_byte(FILE *in);
@@ -287,7 +305,7 @@ int32_t vm_wasm_parse_varuint32(FILE *in);
 int64_t vm_wasm_parse_varuint64(FILE *in);
 uint32_t vm_wasm_parse_uint32(FILE *in);
 uint64_t vm_wasm_parse_uint64(FILE *in);
-const char *vm_wasm_parse_block_type(FILE *in);
+vm_wasm_lang_type_t vm_wasm_parse_block_type(FILE *in);
 vm_wasm_br_table_t vm_wasm_parse_br_table(FILE *in);
 vm_wasm_call_indirect_t vm_wasm_parse_call_indirect(FILE *in);
 vm_wasm_memory_immediate_t vm_wasm_parse_memory_immediate(FILE *in);
@@ -295,7 +313,7 @@ vm_wasm_type_function_t vm_wasm_parse_type_function(FILE *in);
 vm_wasm_type_table_t vm_wasm_parse_type_table(FILE *in);
 vm_wasm_type_global_t vm_wasm_parse_type_global(FILE *in);
 vm_wasm_type_memory_t vm_wasm_parse_type_memory(FILE *in);
-vm_wasm_type_t vm_wasm_parse_type(FILE *in, const char *tag);
+vm_wasm_type_t vm_wasm_parse_type(FILE *in, vm_wasm_lang_type_t tag);
 vm_wasm_section_custom_t vm_wasm_parse_section_custom(FILE *in, vm_wasm_section_header_t header);
 vm_wasm_section_type_t vm_wasm_parse_section_type(FILE *in);
 vm_wasm_section_import_t vm_wasm_parse_section_import(FILE *in);
