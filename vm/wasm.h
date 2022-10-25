@@ -104,6 +104,9 @@ typedef struct vm_wasm_instr_immediate_t vm_wasm_instr_immediate_t;
 struct vm_wasm_instr_t;
 typedef struct vm_wasm_instr_t vm_wasm_instr_t;
 
+struct vm_wasm_section_t;
+typedef struct vm_wasm_section_t vm_wasm_section_t;
+
 struct vm_wasm_module_t;
 typedef struct vm_wasm_module_t vm_wasm_module_t;
 
@@ -215,9 +218,8 @@ struct vm_wasm_section_function_t {
 };
 
 struct vm_wasm_section_export_entry_t {
-    const char *module_str;
     const char *field_str;
-    const char *kind;
+    vm_wasm_external_kind_t kind;
     vm_wasm_type_t type;
 };
 
@@ -274,7 +276,7 @@ struct vm_wasm_section_start_t {
 
 struct vm_wasm_section_element_entry_t {
     uint64_t index;
-    uint64_t offset;
+    vm_wasm_instr_t offset;
     uint64_t num_elems;
     uint64_t *elems;
 };
@@ -332,7 +334,9 @@ struct vm_wasm_section_t {
 };
 
 struct vm_wasm_module_t {
-
+    vm_wasm_preamble_t preamble;
+    uint64_t num_sections;
+    vm_wasm_section_t *sections;
 };
 
 uint64_t vm_wasm_parse_uleb(FILE *in);
@@ -361,12 +365,14 @@ vm_wasm_section_function_t vm_wasm_parse_section_function(FILE *in);
 vm_wasm_section_table_t vm_wasm_parse_section_table(FILE *in);
 vm_wasm_section_memory_t vm_wasm_parse_section_memory(FILE *in);
 vm_wasm_section_global_t vm_wasm_parse_section_global(FILE *in);
+vm_wasm_section_export_t vm_wasm_parse_section_export(FILE *in);
 vm_wasm_section_start_t vm_wasm_parse_section_start(FILE *in);
 vm_wasm_section_element_t vm_wasm_parse_section_element(FILE *in);
 vm_wasm_section_code_t vm_wasm_parse_section_code(FILE *in);
 vm_wasm_section_data_t vm_wasm_parse_section_data(FILE *in);
 vm_wasm_instr_immediate_t vm_wasm_parse_instr_immediate(FILE *in, vm_wasm_immediate_id_t id);
+vm_wasm_instr_t vm_wasm_parse_init_expr(FILE *in);
 vm_wasm_instr_t vm_wasm_parse_instr(FILE *in);
+vm_wasm_section_t vm_wasm_parse_section(FILE *in, vm_wasm_section_header_t id);
 vm_wasm_module_t vm_wasm_parse_module(FILE *in);
 
-#define vm_wasm_parse_type_init_expr(in) (vm_wasm_parse_instr(in))

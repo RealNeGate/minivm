@@ -431,25 +431,25 @@ vm_wasm_type_memory_t vm_wasm_parse_type_memory(FILE *in) {
 
 vm_wasm_type_t vm_wasm_parse_type(FILE *in, vm_wasm_external_kind_t tag) {
     if (tag == VM_WASM_EXTERNAL_KIND_FUNCTION) {
-        return (vm_wasm_type_t) {
+        return (vm_wasm_type_t){
             .function = vm_wasm_parse_type_function(in),
             .tag = tag,
         };
     }
     if (tag == VM_WASM_EXTERNAL_KIND_TABLE) {
-        return (vm_wasm_type_t) {
+        return (vm_wasm_type_t){
             .table = vm_wasm_parse_type_table(in),
             .tag = tag,
         };
     }
     if (tag == VM_WASM_EXTERNAL_KIND_GLOBAL) {
-        return (vm_wasm_type_t) {
+        return (vm_wasm_type_t){
             .global = vm_wasm_parse_type_global(in),
             .tag = tag,
         };
     }
     if (tag == VM_WASM_EXTERNAL_KIND_MEMORY) {
-        return (vm_wasm_type_t) {
+        return (vm_wasm_type_t){
             .memory = vm_wasm_parse_type_memory(in),
             .tag = tag,
         };
@@ -472,7 +472,7 @@ vm_wasm_section_type_t vm_wasm_parse_section_type(FILE *in) {
         vm_wasm_section_type_entry_t entry;
         vm_wasm_lang_type_t type = vm_wasm_parse_byte(in);
         uint64_t num_params = vm_wasm_parse_uleb(in);
-        vm_wasm_lang_type_t*params = vm_malloc(sizeof(vm_wasm_lang_type_t) * num_params);
+        vm_wasm_lang_type_t *params = vm_malloc(sizeof(vm_wasm_lang_type_t) * num_params);
         for (uint64_t j = 0; j < num_params; j++) {
             params[j] = vm_wasm_parse_byte(in);
         }
@@ -483,7 +483,7 @@ vm_wasm_section_type_t vm_wasm_parse_section_type(FILE *in) {
             has_return_type = true;
             return_type = vm_wasm_parse_byte(in);
         }
-        entries[i] = (vm_wasm_section_type_entry_t) {
+        entries[i] = (vm_wasm_section_type_entry_t){
             .type = type,
             .num_params = num_params,
             .params = params,
@@ -512,7 +512,7 @@ vm_wasm_section_import_t vm_wasm_parse_section_import(FILE *in) {
         field_str[field_len] = '\0';
         vm_wasm_external_kind_t kind = vm_wasm_parse_byte(in);
         vm_wasm_type_t type = vm_wasm_parse_type(in, kind);
-        entries[i] = (vm_wasm_section_import_entry_t) {
+        entries[i] = (vm_wasm_section_import_entry_t){
             .module_str = module_str,
             .field_str = field_str,
             .kind = kind,
@@ -565,12 +565,34 @@ vm_wasm_section_global_t vm_wasm_parse_section_global(FILE *in) {
     uint64_t num_entries = vm_wasm_parse_uleb(in);
     vm_wasm_section_global_entry_t *entries = vm_malloc(sizeof(vm_wasm_section_global_entry_t) * num_entries);
     for (uint64_t i = 0; i < num_entries; i++) {
-        entries[i] = (vm_wasm_section_global_entry_t) {
+        entries[i] = (vm_wasm_section_global_entry_t){
             .global = vm_wasm_parse_type_global(in),
-            .init_expr = vm_wasm_parse_instr(in),
+            .init_expr = vm_wasm_parse_init_expr(in),
         };
     }
     return (vm_wasm_section_global_t){
+        .num_entries = num_entries,
+        .entries = entries,
+    };
+}
+
+vm_wasm_section_export_t vm_wasm_parse_section_export(FILE *in) {
+    uint64_t num_entries = vm_wasm_parse_uleb(in);
+    vm_wasm_section_export_entry_t *entries = vm_malloc(sizeof(vm_wasm_section_export_entry_t) * num_entries);
+    for (uint64_t i = 0; i < num_entries; i++) {
+        uint64_t field_len = vm_wasm_parse_uleb(in);
+        char *field_str = vm_malloc(sizeof(char) * (field_len + 1));
+        fread(field_str, 1, field_len, in);
+        field_str[field_len] = '\0';
+        vm_wasm_external_kind_t kind = vm_wasm_parse_byte(in);
+        vm_wasm_type_t type = vm_wasm_parse_type(in, kind);
+        entries[i] = (vm_wasm_section_export_entry_t){
+            .field_str = field_str,
+            .kind = kind,
+            .type = type,
+        };
+    }
+    return (vm_wasm_section_export_t){
         .num_entries = num_entries,
         .entries = entries,
     };
@@ -587,7 +609,7 @@ vm_wasm_section_element_t vm_wasm_parse_section_element(FILE *in) {
     vm_wasm_section_element_entry_t *entries = vm_malloc(sizeof(vm_wasm_section_element_entry_t) * num_entries);
     for (uint64_t i = 0; i < num_entries; i++) {
         uint64_t index = vm_wasm_parse_uleb(in);
-        uint64_t offset = vm_wasm_parse_uleb(in);
+        vm_wasm_instr_t offset = vm_wasm_parse_init_expr(in);
         uint64_t num_elems = vm_wasm_parse_uleb(in);
         uint64_t *elems = vm_malloc(sizeof(uint64_t) * num_elems);
         for (uint64_t j = 0; j < num_elems; j++) {
@@ -600,7 +622,7 @@ vm_wasm_section_element_t vm_wasm_parse_section_element(FILE *in) {
             .elems = elems,
         };
     }
-    return (vm_wasm_section_element_t) {
+    return (vm_wasm_section_element_t){
         .num_entries = num_entries,
         .entries = entries,
     };
@@ -611,13 +633,13 @@ vm_wasm_section_code_t vm_wasm_parse_section_code(FILE *in) {
     vm_wasm_section_code_entry_t *entries = vm_malloc(sizeof(vm_wasm_section_code_entry_t) * num_entries);
     for (uint64_t i = 0; i < num_entries; i++) {
         uint64_t body_len = vm_wasm_parse_uleb(in);
-        long end = ftell(in) + (long) body_len;
+        long end = ftell(in) + (long)body_len;
         uint64_t num_locals = vm_wasm_parse_uleb(in);
         vm_wasm_section_code_entry_local_t *locals = vm_malloc(sizeof(vm_wasm_section_code_entry_local_t) * num_locals);
         for (uint64_t j = 0; j < num_locals; j++) {
             uint64_t count = vm_wasm_parse_uleb(in);
             vm_wasm_lang_type_t type = vm_wasm_parse_byte(in);
-            locals[j] = (vm_wasm_section_code_entry_local_t) {
+            locals[j] = (vm_wasm_section_code_entry_local_t){
                 .count = count,
                 .type = type,
             };
@@ -633,7 +655,7 @@ vm_wasm_section_code_t vm_wasm_parse_section_code(FILE *in) {
             instrs[num_instrs] = vm_wasm_parse_instr(in);
             num_instrs += 1;
         }
-        entries[i] = (vm_wasm_section_code_entry_t) {
+        entries[i] = (vm_wasm_section_code_entry_t){
             .num_locals = num_locals,
             .locals = locals,
             .num_instrs = num_instrs,
@@ -651,11 +673,11 @@ vm_wasm_section_data_t vm_wasm_parse_section_data(FILE *in) {
     vm_wasm_section_data_entry_t *entries = vm_malloc(sizeof(vm_wasm_section_data_entry_t) * num_entries);
     for (uint64_t i = 0; i < num_entries; i++) {
         uint64_t index = vm_wasm_parse_uleb(in);
-        vm_wasm_instr_t offset = vm_wasm_parse_instr(in);
+        vm_wasm_instr_t offset = vm_wasm_parse_init_expr(in);
         uint64_t size = vm_wasm_parse_uleb(in);
         uint8_t *data = vm_malloc(sizeof(uint8_t) * size);
         fread(data, 1, size, in);
-        entries[i] = (vm_wasm_section_data_entry_t) {
+        entries[i] = (vm_wasm_section_data_entry_t){
             .index = index,
             .offset = offset,
             .size = size,
@@ -670,72 +692,78 @@ vm_wasm_section_data_t vm_wasm_parse_section_data(FILE *in) {
 
 vm_wasm_instr_immediate_t vm_wasm_parse_instr_immediate(FILE *in, vm_wasm_immediate_id_t id) {
     if (id == VM_WASM_IMMEDIATE_BLOCK_TYPE) {
-        return (vm_wasm_instr_immediate_t) {
+        return (vm_wasm_instr_immediate_t){
             .id = VM_WASM_IMMEDIATE_BLOCK_TYPE,
             .block_type = vm_wasm_parse_block_type(in),
         };
     }
     if (id == VM_WASM_IMMEDIATE_VARUINT1) {
-        return (vm_wasm_instr_immediate_t) {
+        return (vm_wasm_instr_immediate_t){
             .id = VM_WASM_IMMEDIATE_VARUINT1,
             .varuint1 = vm_wasm_parse_varuint1(in),
         };
     }
     if (id == VM_WASM_IMMEDIATE_VARUINT32) {
-        return (vm_wasm_instr_immediate_t) {
+        return (vm_wasm_instr_immediate_t){
             .id = VM_WASM_IMMEDIATE_VARUINT32,
             .varuint32 = vm_wasm_parse_varuint32(in),
         };
     }
     if (id == VM_WASM_IMMEDIATE_VARUINT64) {
-        return (vm_wasm_instr_immediate_t) {
+        return (vm_wasm_instr_immediate_t){
             .id = VM_WASM_IMMEDIATE_VARUINT64,
             .varuint64 = vm_wasm_parse_varuint64(in),
         };
     }
     if (id == VM_WASM_IMMEDIATE_VARINT32) {
-        return (vm_wasm_instr_immediate_t) {
+        return (vm_wasm_instr_immediate_t){
             .id = VM_WASM_IMMEDIATE_VARINT32,
             .varint32 = vm_wasm_parse_varint32(in),
         };
     }
     if (id == VM_WASM_IMMEDIATE_VARINT64) {
-        return (vm_wasm_instr_immediate_t) {
+        return (vm_wasm_instr_immediate_t){
             .id = VM_WASM_IMMEDIATE_VARINT64,
             .varint64 = vm_wasm_parse_varint64(in),
         };
     }
     if (id == VM_WASM_IMMEDIATE_UINT32) {
-        return (vm_wasm_instr_immediate_t) {
+        return (vm_wasm_instr_immediate_t){
             .id = VM_WASM_IMMEDIATE_UINT32,
             .uint32 = vm_wasm_parse_uint32(in),
         };
     }
     if (id == VM_WASM_IMMEDIATE_UINT64) {
-        return (vm_wasm_instr_immediate_t) {
+        return (vm_wasm_instr_immediate_t){
             .id = VM_WASM_IMMEDIATE_UINT64,
             .uint64 = vm_wasm_parse_uint64(in),
         };
     }
     if (id == VM_WASM_IMMEDIATE_BR_TABLE) {
-        return (vm_wasm_instr_immediate_t) {
+        return (vm_wasm_instr_immediate_t){
             .id = VM_WASM_IMMEDIATE_BR_TABLE,
             .br_table = vm_wasm_parse_br_table(in),
         };
     }
     if (id == VM_WASM_IMMEDIATE_CALL_INDIRECT) {
-        return (vm_wasm_instr_immediate_t) {
+        return (vm_wasm_instr_immediate_t){
             .id = VM_WASM_IMMEDIATE_CALL_INDIRECT,
             .call_indirect = vm_wasm_parse_call_indirect(in),
         };
     }
     if (id == VM_WASM_IMMEDIATE_MEMORY_IMMEDIATE) {
-        return (vm_wasm_instr_immediate_t) {
+        return (vm_wasm_instr_immediate_t){
             .id = VM_WASM_IMMEDIATE_MEMORY_IMMEDIATE,
             .memory_immediate = vm_wasm_parse_memory_immediate(in),
         };
     }
     __builtin_trap();
+}
+
+vm_wasm_instr_t vm_wasm_parse_init_expr(FILE *in) {
+    vm_wasm_instr_t ret = vm_wasm_parse_instr(in);
+    vm_wasm_parse_byte(in);
+    return ret;
 }
 
 vm_wasm_instr_t vm_wasm_parse_instr(FILE *in) {
@@ -748,8 +776,96 @@ vm_wasm_instr_t vm_wasm_parse_instr(FILE *in) {
     };
 }
 
-vm_wasm_module_t vm_wasm_parse_module(FILE *in) {
-    return (vm_wasm_module_t){
+vm_wasm_section_t vm_wasm_parse_section(FILE *in, vm_wasm_section_header_t header) {
+    vm_wasm_section_id_t id = header.id;
+    if (id == VM_WASM_SECTION_ID_CUSTOM) {
+        return (vm_wasm_section_t) {
+            .id = id,
+            .custom_section = vm_wasm_parse_section_custom(in, header),
+        };
+    }
+    if (id == VM_WASM_SECTION_ID_TYPE) {
+        return (vm_wasm_section_t) {
+            .id = id,
+            .type_section = vm_wasm_parse_section_type(in),
+        };
+    }
+    if (id == VM_WASM_SECTION_ID_IMPORT) {
+        return (vm_wasm_section_t) {
+            .id = id,
+            .import_section = vm_wasm_parse_section_import(in),
+        };
+    }
+    if (id == VM_WASM_SECTION_ID_FUNCTION) {
+        return (vm_wasm_section_t) {
+            .id = id,
+            .function_section = vm_wasm_parse_section_function(in),
+        };
+    }
+    if (id == VM_WASM_SECTION_ID_TABLE) {
+        return (vm_wasm_section_t) {
+            .id = id,
+            .table_section = vm_wasm_parse_section_table(in),
+        };
+    }
+    if (id == VM_WASM_SECTION_ID_MEMORY) {
+        return (vm_wasm_section_t) {
+            .id = id,
+            .memory_section = vm_wasm_parse_section_memory(in),
+        };
+    }
+    if (id == VM_WASM_SECTION_ID_GLOBAL) {
+        return (vm_wasm_section_t) {
+            .id = id,
+            .global_section = vm_wasm_parse_section_global(in),
+        };
+    }
+    if (id == VM_WASM_SECTION_ID_EXPORT) {
+        return (vm_wasm_section_t) {
+            .id = id,
+            .export_section = vm_wasm_parse_section_export(in),
+        };
+    }
+    if (id == VM_WASM_SECTION_ID_START) {
+        return (vm_wasm_section_t) {
+            .id = id,
+            .start_section = vm_wasm_parse_section_start(in),
+        };
+    }
+    if (id == VM_WASM_SECTION_ID_ELEMENT) {
+        return (vm_wasm_section_t) {
+            .id = id,
+            .element_section = vm_wasm_parse_section_element(in),
+        };
+    }
+    if (id == VM_WASM_SECTION_ID_CODE) {
+        return (vm_wasm_section_t) {
+            .id = id,
+            .code_section = vm_wasm_parse_section_code(in),
+        };
+    }
+    if (id == VM_WASM_SECTION_ID_DATA) {
+        return (vm_wasm_section_t) {
+            .id = id,
+            .data_section = vm_wasm_parse_section_data(in),
+        };
+    }
+    __builtin_trap();
+}
 
+vm_wasm_module_t vm_wasm_parse_module(FILE *in) {
+    vm_wasm_preamble_t preamble = vm_wasm_parse_preamble(in);
+    uint64_t alloc_sections = 4;
+    vm_wasm_section_t *sections = vm_malloc(sizeof(vm_wasm_section_t) * alloc_sections);
+    uint64_t num_sections = 0;
+    while (!feof(in)) {
+        vm_wasm_section_header_t header = vm_wasm_parse_section_header(in);
+        sections[num_sections] = vm_wasm_parse_section(in, header);
+        num_sections += 1;
+    }
+    return (vm_wasm_module_t){
+        .preamble = preamble,
+        .num_sections = num_sections,
+        .sections = sections,
     };
 }
