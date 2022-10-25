@@ -361,6 +361,24 @@ vm_wasm_type_memory_t vm_wasm_parse_type_memory(FILE *in) {
 }
 
 vm_wasm_type_t vm_wasm_parse_type(FILE *in, const char *tag) {
+    if (!strcmp(tag, "function")) {
+        return (vm_wasm_type_t) {
+            .function = vm_wasm_parse_type_function(in),
+            .tag = tag,
+        };
+    }
+    if (!strcmp(tag, "table")) {
+        return (vm_wasm_type_t) {
+            .table = vm_wasm_parse_type_table(in),
+            .tag = tag,
+        };
+    }
+    if (!strcmp(tag, "global")) {
+        return (vm_wasm_type_t) {
+            .global = vm_wasm_parse_type_global(in),
+            .tag = tag,
+        };
+    }
     if (!strcmp(tag, "memory")) {
         return (vm_wasm_type_t) {
             .memory = vm_wasm_parse_type_memory(in),
@@ -477,7 +495,7 @@ vm_wasm_section_global_t vm_wasm_parse_section_global(FILE *in) {
     vm_wasm_section_global_entry_t *entries = vm_malloc(sizeof(vm_wasm_section_global_entry_t) * num_entries);
     for (uint64_t i = 0; i < num_entries; i++) {
         entries[i] = (vm_wasm_section_global_entry_t) {
-            .global = vm_wasm_parse_instr(in),
+            .global = vm_wasm_parse_type_global(in),
             .init_expr = vm_wasm_parse_instr(in),
         };
     }
@@ -489,13 +507,31 @@ vm_wasm_section_global_t vm_wasm_parse_section_global(FILE *in) {
 
 vm_wasm_section_start_t vm_wasm_parse_section_start(FILE *in) {
     return (vm_wasm_section_start_t){
-
+        .index = vm_wasm_parse_uleb(in),
     };
 }
 
 vm_wasm_section_element_t vm_wasm_parse_section_element(FILE *in) {
-    return (vm_wasm_section_element_t){
-
+    uint64_t num_entries = vm_wasm_parse_uleb(in);
+    vm_wasm_section_element_entry_t *entries = vm_malloc(sizeof(vm_wasm_section_element_entry_t) * num_entries);
+    for (uint64_t i = 0; i < num_entries; i++) {
+        uint64_t index = vm_wasm_parse_uleb(in);
+        uint64_t offset = vm_wasm_parse_uleb(in);
+        uint64_t num_elems = vm_wasm_parse_uleb(in);
+        uint64_t *elems = vm_malloc(sizeof(uint64_t) * num_elems);
+        for (uint64_t j = 0; j < num_elems; j++) {
+            elems[j] = vm_wasm_parse_uleb(in);
+        }
+        entries[i] = (vm_wasm_section_element_entry_t){
+            .index = index,
+            .offset = offset,
+            .num_elems = num_elems,
+            .elems = elems,
+        };
+    }
+    return (vm_wasm_section_element_t) {
+        .num_entries = num_entries,
+        .entries = entries,
     };
 }
 

@@ -1,4 +1,5 @@
 
+#include <stdint.h>
 #include "./lib.h"
 
 struct vm_wasm_preamble_t;
@@ -40,6 +41,12 @@ typedef struct vm_wasm_section_type_entry_t vm_wasm_section_type_entry_t;
 struct vm_wasm_section_type_t;
 typedef struct vm_wasm_section_type_t vm_wasm_section_type_t;
 
+struct vm_wasm_section_export_entry_t;
+typedef struct vm_wasm_section_export_entry_t vm_wasm_section_export_entry_t;
+
+struct vm_wasm_section_export_t;
+typedef struct vm_wasm_section_export_t vm_wasm_section_export_t;
+
 struct vm_wasm_section_import_entry_t;
 typedef struct vm_wasm_section_import_entry_t vm_wasm_section_import_entry_t;
 
@@ -64,8 +71,17 @@ typedef struct vm_wasm_section_global_t vm_wasm_section_global_t;
 struct vm_wasm_section_start_t;
 typedef struct vm_wasm_section_start_t vm_wasm_section_start_t;
 
+struct vm_wasm_section_element_entry_t;
+typedef struct vm_wasm_section_element_entry_t vm_wasm_section_element_entry_t;
+
 struct vm_wasm_section_element_t;
 typedef struct vm_wasm_section_element_t vm_wasm_section_element_t;
+
+struct vm_wasm_section_code_entry_local_t;
+typedef struct vm_wasm_section_code_entry_local_t vm_wasm_section_code_entry_local_t;
+
+struct vm_wasm_section_code_entry_t;
+typedef struct vm_wasm_section_code_entry_t vm_wasm_section_code_entry_t;
 
 struct vm_wasm_section_code_t;
 typedef struct vm_wasm_section_code_t vm_wasm_section_code_t;
@@ -186,6 +202,18 @@ struct vm_wasm_section_function_t {
     uint64_t *entries;
 };
 
+struct vm_wasm_section_export_entry_t {
+    const char *module_str;
+    const char *field_str;
+    const char *kind;
+    vm_wasm_type_t type;
+};
+
+struct vm_wasm_section_export_t {
+    uint64_t num_entries;
+    vm_wasm_section_export_entry_t *entries;
+};
+
 struct vm_wasm_section_table_t {
     uint64_t num_entries;
     vm_wasm_type_table_t *entries;
@@ -197,7 +225,6 @@ struct vm_wasm_section_memory_t {
 };
 
 struct vm_wasm_instr_t {
-
 };
 
 struct vm_wasm_section_global_entry_t {
@@ -211,15 +238,31 @@ struct vm_wasm_section_global_t {
 };
 
 struct vm_wasm_section_start_t {
-
+    uint64_t index;
 };
 
-struct vm_wasm_section_element_t {
+struct vm_wasm_section_element_entry_t {
+    uint64_t index;
+    uint64_t offset;
+    uint64_t num_elems;
+    uint64_t *elems;
+};
 
+struct vm_wasm_section_code_entry_local_t {
+    uint64_t count;
+    const char *type;
+};
+
+struct vm_wasm_section_code_entry_t {
+    uint64_t num_locals;
+    vm_wasm_section_code_entry_local_t *locals;
+    uint64_t num_instrs;
+    vm_wasm_instr_t *instrs;
 };
 
 struct vm_wasm_section_code_t {
-
+    uint64_t num_entries;
+    vm_wasm_section_code_entry_t *entries;
 };
 
 struct vm_wasm_section_data_t {
