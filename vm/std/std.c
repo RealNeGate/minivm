@@ -4,6 +4,7 @@
 #include "./io.h"
 #include "../ast/ast.h"
 #include "../obj.h"
+#include <stdio.h>
 
 void vm_std_os_exit(vm_std_closure_t *closure, vm_std_value_t *args) {
     exit((int)vm_value_to_i64(args[0]));
@@ -109,7 +110,8 @@ void vm_std_vm_concat(vm_std_closure_t *closure, vm_std_value_t *args) {
         ) {
             vm_io_print_lit(buf, args[i]);
         } else {
-            vm_io_buffer_t *ebuf = vm_io_buffer_from_cstr("attempt to concatenate a ");
+            vm_io_buffer_t *ebuf = vm_io_buffer_from_str(0, NULL);
+            vm_io_buffer_format(ebuf, "attempt to concatenate a ");
             vm_io_format_tag(ebuf, args[i].tag);
             vm_io_buffer_format(ebuf, " value");
             *args = (vm_std_value_t) {

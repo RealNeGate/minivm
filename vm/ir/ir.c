@@ -83,7 +83,7 @@ void vm_io_format_tag(vm_io_buffer_t *out, vm_tag_t tag) {
             break;
         }
         case VM_TAG_STRING: {
-            vm_io_buffer_format(out, "str");
+            vm_io_buffer_format(out, "string");
             break;
         }
         case VM_TAG_CLOSURE: {

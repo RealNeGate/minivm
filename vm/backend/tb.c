@@ -1510,6 +1510,7 @@ void *vm_tb_rfunc_comp(vm_rblock_t *rblock) {
                     rets[1] = tb_inst_uint(state->fun, TB_TYPE_I32, VM_TAG_ERROR);
                     tb_inst_ret(state->fun, 2, rets);
                     block = NULL;
+                    break;
                 }
             }
         }
