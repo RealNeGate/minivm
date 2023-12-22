@@ -1,9 +1,18 @@
 #include "./obj.h"
-
-#include "./std/io.h"
+#include "std/io.h"
 
 int64_t vm_value_to_i64(vm_std_value_t arg) {
     switch (arg.tag) {
+        case VM_TAG_NIL: {
+            return 0;
+        }
+        case VM_TAG_BOOL: {
+            if (arg.value.b) {
+                return 1;
+            } else {
+                return 0;
+            }
+        }
         case VM_TAG_I8: {
             return (int64_t)arg.value.i8;
         }
@@ -26,6 +35,48 @@ int64_t vm_value_to_i64(vm_std_value_t arg) {
             return -1;
         }
     }
+}
+
+vm_std_value_t vm_value_from_i64(vm_tag_t tag, int64_t arg) {
+    vm_std_value_t ret;
+    ret.tag = tag;
+    switch (tag) {
+        case VM_TAG_NIL: {
+            break;
+        }
+        case VM_TAG_BOOL: {
+            ret.value.b = arg != 0;
+            break;
+        }
+        case VM_TAG_I8: {
+            ret.value.i8 = arg;
+            break;
+        }
+        case VM_TAG_I16: {
+            ret.value.i16 = arg;
+            break;
+        }
+        case VM_TAG_I32: {
+            ret.value.i32 = arg;
+            break;
+        }
+        case VM_TAG_I64: {
+            ret.value.i64 = arg;
+            break;
+        }
+        case VM_TAG_F32: {
+            ret.value.f32 = arg;
+            break;
+        }
+        case VM_TAG_F64: {
+            ret.value.f64 = arg;
+            break;
+        }
+        default: {
+            __builtin_trap();
+        }
+    }
+    return ret;
 }
 
 bool vm_value_is_int(vm_std_value_t val) {
@@ -220,8 +271,8 @@ bool vm_value_eq(vm_std_value_t lhs, vm_std_value_t rhs) {
                 }
             }
         }
-        case VM_TAG_STR: {
-            return rhs.tag == VM_TAG_STR && !strcmp(lhs.value.str, rhs.value.str);
+        case VM_TAG_STRING: {
+            return rhs.tag == VM_TAG_STRING && lhs.value.string->len == rhs.value.string->len && !memcmp(lhs.value.string->buf, rhs.value.string->buf, rhs.value.string->len);
         }
         default: {
             return lhs.tag == rhs.tag && lhs.value.all == rhs.value.all;
@@ -261,13 +312,12 @@ size_t vm_value_hash(vm_std_value_t value) {
             }
             return (size_t) *(uint64_t *) &value.value.f64;
         }
-        case VM_TAG_STR: {
+        case VM_TAG_STRING: {
             size_t ret = 1 << 16;
-            const char *head = value.value.str;
-            while (*head != '\0') {
+            vm_io_buffer_t *head = value.value.buffer;
+            for (size_t i = 0; i < head->len; i++) {
                 ret *= 33;
-                ret ^= *head;
-                head += 1;
+                ret ^= *head->buf;
             }
             return ret;
         }
@@ -297,7 +347,7 @@ vm_table_t *vm_table_new(void) {
     return vm_table_new_size(2);
 }
 
-vm_pair_t *vm_table_lookup(vm_table_t *table, vm_value_t key_val, uint32_t key_tag) {
+vm_pair_t *vm_table_get(vm_table_t *table, vm_value_t key_val, uint32_t key_tag) {
     if (table->alloc == 0) {
         return NULL;
     }
@@ -413,7 +463,7 @@ void vm_table_set(vm_table_t *restrict table, vm_value_t key_val, vm_value_t val
     if (vm_value_eq(vlen, key)) {
         while (true) {
             int32_t next = table->len + 1;
-            vm_pair_t *got = vm_table_lookup(table, (vm_value_t){.i32 = next}, VM_TAG_I32);
+            vm_pair_t *got = vm_table_get(table, (vm_value_t){.i32 = next}, VM_TAG_I32);
             if (got == NULL) {
                 break;
             }
@@ -427,10 +477,27 @@ void vm_table_set_pair(vm_table_t *table, vm_pair_t *pair) {
     vm_table_set(table, pair->key_val, pair->val_val, pair->key_tag, pair->val_tag);
 }
 
+void vm_table_set_value(vm_table_t *table, vm_std_value_t key, vm_std_value_t value) {
+    vm_table_set(table, key.value, value.value, key.tag, value.tag);
+}
+
+vm_std_value_t vm_table_get_value(vm_table_t *table, vm_std_value_t key) {
+    vm_pair_t *pair = vm_table_get(table, key.value, key.tag);
+    if (pair != NULL) {
+        return (vm_std_value_t) {
+            .tag = pair->val_tag,
+            .value = pair->val_val,
+        };
+    }
+    return (vm_std_value_t) {
+        .tag = VM_TAG_NIL
+    };
+}
+
 void vm_table_get_pair(vm_table_t *table, vm_pair_t *out) {
     vm_value_t key_val = out->key_val;
     vm_tag_t key_tag = (vm_tag_t)out->key_tag;
-    vm_pair_t *pair = vm_table_lookup(table, key_val, key_tag);
+    vm_pair_t *pair = vm_table_get(table, key_val, key_tag);
     if (pair != NULL) {
         out->val_val = pair->val_val;
         out->val_tag = pair->val_tag;

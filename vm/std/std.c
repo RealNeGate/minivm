@@ -2,8 +2,8 @@
 #include "./std.h"
 
 #include "./io.h"
-#include "./util.h"
 #include "../ast/ast.h"
+#include "../obj.h"
 
 void vm_std_os_exit(vm_std_closure_t *closure, vm_std_value_t *args) {
     exit((int)vm_value_to_i64(args[0]));
@@ -13,13 +13,11 @@ vm_ast_node_t vm_lang_lua_parse(vm_config_t *config, const char *str);
 void vm_ast_comp_more(vm_ast_node_t node, vm_blocks_t *blocks);
 
 void vm_std_load(vm_std_closure_t *closure, vm_std_value_t *args) {
-    if (args[0].tag != VM_TAG_STR) {
-        *args = (vm_std_value_t) {
-            .tag = VM_TAG_ERROR,
-            .value.str = "cannot load non-string value",
-        };
+    if (args[0].tag != VM_TAG_STRING) {
+        *args = vm_std_value_cerr("cannot load non-string value");
+        return;
     }
-    const char *str = args[0].value.str;
+    const char *str = (const char *) args[0].value.string->buf;
     vm_ast_node_t node = vm_lang_lua_parse(closure->config, str);
     vm_ast_comp_more(node, closure->blocks);
     
@@ -46,11 +44,11 @@ void vm_std_assert(vm_std_closure_t *closure, vm_std_value_t *args) {
     vm_std_value_t val = args[0];
     if (val.tag == VM_TAG_NIL || (val.tag == VM_TAG_BOOL && !val.value.b)) {
         vm_std_value_t msg = args[1];
-        vm_io_buffer_t buf = {0};
-        vm_io_print_lit(&buf, msg);
+        vm_io_buffer_t *buf = vm_io_buffer_from_str(0, NULL);
+        vm_io_print_lit(buf, msg);
         *args = (vm_std_value_t){
             .tag = VM_TAG_ERROR,
-            .value.str = buf.buf,
+            .value.string = buf,
         };
     } else {
         *args = (vm_std_value_t){
@@ -95,25 +93,37 @@ void vm_std_vm_print(vm_std_closure_t *closure, vm_std_value_t *args) {
 }
 
 void vm_std_vm_concat(vm_std_closure_t *closure, vm_std_value_t *args) {
-    size_t len = 1;
-    for (size_t i = 0; args[i].tag == VM_TAG_STR; i++) {
-        len += strlen(args[i].value.str);
-    }
-    char *buf = vm_malloc(sizeof(char) * len);
-    size_t head = 0;
-    for (size_t i = 0; args[i].tag == VM_TAG_STR; i++) {
-        size_t len = strlen(args[i].value.str);
-        if (len == 0) {
-            continue;
+    vm_io_buffer_t *buf = vm_io_buffer_from_str(0, NULL);
+    for (size_t i = 0; args[i].tag != VM_TAG_UNK; i++) {
+        if (
+            args[i].tag == VM_TAG_STRING
+        ) {
+            vm_io_buffer_format(buf, "%.*s", (int) args[i].value.string->len, args[i].value.string->buf);
+        } else if (
+            args[i].tag == VM_TAG_I8
+            || args[i].tag == VM_TAG_I16
+            || args[i].tag == VM_TAG_I32
+            || args[i].tag == VM_TAG_I64
+            || args[i].tag == VM_TAG_F32
+            || args[i].tag == VM_TAG_F64
+        ) {
+            vm_io_print_lit(buf, args[i]);
+        } else {
+            vm_io_buffer_t *ebuf = vm_io_buffer_from_cstr("attempt to concatenate a ");
+            vm_io_format_tag(ebuf, args[i].tag);
+            vm_io_buffer_format(ebuf, " value");
+            *args = (vm_std_value_t) {
+                .tag = VM_TAG_ERROR,
+                .value.string = ebuf,
+            };
+            return;
         }
-        memcpy(&buf[head], args[i].value.str, len);
-        head += len;
     }
-    buf[len-1] = '\0';
     *args = (vm_std_value_t) {
-        .tag = VM_TAG_STR,
-        .value.str = buf,
+        .tag = VM_TAG_STRING,
+        .value.string = buf,
     };
+    return;
 }
 
 void vm_std_type(vm_std_closure_t *closure, vm_std_value_t *args) {
@@ -151,7 +161,7 @@ void vm_std_type(vm_std_closure_t *closure, vm_std_value_t *args) {
             ret = "number";
             break;
         }
-        case VM_TAG_STR: {
+        case VM_TAG_STRING: {
             ret = "string";
             break;
         }
@@ -176,10 +186,7 @@ void vm_std_type(vm_std_closure_t *closure, vm_std_value_t *args) {
             break;
         }
     }
-    *args = (vm_std_value_t) {
-        .tag = VM_TAG_STR,
-        .value.str = ret,
-    };
+    *args = vm_std_value_cstr(ret);
 }
 
 void vm_value_buffer_tostring(vm_io_buffer_t *buf, vm_std_value_t value) {
@@ -216,8 +223,8 @@ void vm_value_buffer_tostring(vm_io_buffer_t *buf, vm_std_value_t value) {
             vm_io_buffer_format(buf, VM_FORMAT_FLOAT, value.value.f64);
             break;
         }
-        case VM_TAG_STR: {
-            vm_io_buffer_format(buf, "%s", value.value.str);
+        case VM_TAG_STRING: {
+            vm_io_buffer_format(buf, "%.*s", (int) value.value.string->len, value.value.string->buf);
             break;
         }
         case VM_TAG_CLOSURE: {
@@ -240,11 +247,11 @@ void vm_value_buffer_tostring(vm_io_buffer_t *buf, vm_std_value_t value) {
 }
 
 void vm_std_tostring(vm_std_closure_t *closure, vm_std_value_t *args) {
-    vm_io_buffer_t out = {0};
-    vm_value_buffer_tostring(&out, *args);
+    vm_io_buffer_t *out = vm_io_buffer_from_str(0, NULL);
+    vm_value_buffer_tostring(out, *args);
     *args = (vm_std_value_t) {
-        .tag = VM_TAG_STR,
-        .value.str = out.buf,
+        .tag = VM_TAG_STRING,
+        .value.string = out,
     };
 }
 
@@ -270,30 +277,30 @@ vm_table_t *vm_std_new(void) {
 
     {
         vm_table_t *io = vm_table_new();
-        VM_STD_SET_TAB(std, "io", io);
+        vm_table_set_value(std, vm_std_value_cstr("io"), vm_std_value_table(io));
     }
 
     {
         vm_table_t *vm = vm_table_new();
-        VM_STD_SET_FFI(vm, "print", &vm_std_vm_print);
+        vm_table_set_value(vm, vm_std_value_cstr("print"), vm_std_value_ffi(&vm_std_vm_print));
         {
             vm_table_t *vm_ver = vm_table_new();
-            VM_STD_SET_TAB(vm, "version", vm_ver);
+            vm_table_set_value(vm, vm_std_value_cstr("version"), vm_std_value_table(vm_ver));
         }
-        VM_STD_SET_TAB(std, "vm", vm);
+        vm_table_set_value(std, vm_std_value_cstr("vm"), vm_std_value_table(vm));
     }
 
     {
         vm_table_t *os = vm_table_new();
-        VM_STD_SET_FFI(os, "exit", &vm_std_os_exit);
-        VM_STD_SET_TAB(std, "os", os);
+        vm_table_set_value(os, vm_std_value_cstr("exit"), vm_std_value_ffi(&vm_std_os_exit));
+        vm_table_set_value(std, vm_std_value_cstr("os"), vm_std_value_table(os));
     }
 
-    VM_STD_SET_FFI(std, "tostring", &vm_std_tostring);
-    VM_STD_SET_FFI(std, "type", &vm_std_type);
-    VM_STD_SET_FFI(std, "print", &vm_std_print);
-    VM_STD_SET_FFI(std, "assert", &vm_std_assert);
-    VM_STD_SET_FFI(std, "load", &vm_std_load);
+    vm_table_set_value(std, vm_std_value_cstr("tostring"), vm_std_value_ffi(&vm_std_tostring));
+    vm_table_set_value(std, vm_std_value_cstr("type"), vm_std_value_ffi(&vm_std_type));
+    vm_table_set_value(std, vm_std_value_cstr("print"), vm_std_value_ffi(&vm_std_print));
+    vm_table_set_value(std, vm_std_value_cstr("assert"), vm_std_value_ffi(&vm_std_assert));
+    vm_table_set_value(std, vm_std_value_cstr("load"), vm_std_value_ffi(&vm_std_load));
 
     return std;
 }

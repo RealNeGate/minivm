@@ -531,10 +531,7 @@ static vm_arg_t vm_ast_comp_to(vm_ast_comp_t *comp, vm_ast_node_t node) {
                             vm_arg_t env_arg = vm_ast_comp_to(comp, vm_ast_build_ident("_ENV"));
                             vm_arg_t key_arg = (vm_arg_t){
                                 .type = VM_ARG_LIT,
-                                .lit = (vm_std_value_t){
-                                    .tag = VM_TAG_STR,
-                                    .value.str = target.value.ident,
-                                },
+                                .lit = vm_std_value_cstr(target.value.ident),
                             };
                             vm_ast_blocks_instr(
                                 comp,
@@ -949,7 +946,7 @@ static vm_arg_t vm_ast_comp_to(vm_ast_comp_t *comp, vm_ast_node_t node) {
             vm_std_value_t num = node.value.literal;
             if (num.tag == VM_TAG_NIL) {
                 return vm_arg_nil();
-            } else if (num.tag == VM_TAG_STR) {
+            } else if (num.tag == VM_TAG_STRING) {
                 vm_arg_t str = (vm_arg_t){
                     .type = VM_ARG_LIT,
                     .lit = num,
@@ -997,10 +994,7 @@ static vm_arg_t vm_ast_comp_to(vm_ast_comp_t *comp, vm_ast_node_t node) {
                 if (got.type != VM_ARG_NONE) {
                     vm_arg_t env_key = (vm_arg_t){
                         .type = VM_ARG_LIT,
-                        .lit = (vm_std_value_t){
-                            .tag = VM_TAG_STR,
-                            .value.str = lit,
-                        },
+                        .lit = vm_std_value_cstr(lit),
                     };
                     vm_arg_t out = vm_ast_comp_reg(comp);
                     vm_block_t *next = vm_ast_comp_new_block(comp);

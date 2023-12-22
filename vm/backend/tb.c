@@ -36,6 +36,15 @@ void vm_tb_func_report_error(vm_tb_state_t *state, const char *str);
     ret;                                                      \
 })
 
+static const vm_tag_t vm_tb_num_type_to_tag[8] = {
+    [VM_USE_NUM_I8] = VM_TAG_I8,
+    [VM_USE_NUM_I16] = VM_TAG_I16,
+    [VM_USE_NUM_I32] = VM_TAG_I32,
+    [VM_USE_NUM_I64] = VM_TAG_I64,
+    [VM_USE_NUM_F32] = VM_TAG_F32,
+    [VM_USE_NUM_F64] = VM_TAG_F64,
+};
+
 TB_Node *vm_tb_ptr_name(vm_tb_state_t *state, const char *name, void *value) {
     return tb_inst_uint(state->fun, TB_TYPE_PTR, (uint64_t)value);
 }
@@ -66,7 +75,7 @@ TB_DataType vm_tag_to_tb_type(vm_tag_t tag) {
         case VM_TAG_F64: {
             return TB_TYPE_F64;
         }
-        case VM_TAG_STR: {
+        case VM_TAG_STRING: {
             return TB_TYPE_PTR;
         }
         case VM_TAG_FUN: {
@@ -120,8 +129,8 @@ TB_Node *vm_tb_func_read_arg(vm_tb_state_t *state, TB_Node **regs, vm_arg_t arg)
                 case VM_TAG_F64: {
                     return tb_inst_float64(state->fun, arg.lit.value.f64);
                 }
-                case VM_TAG_STR: {
-                    return tb_inst_string(state->fun, strlen(arg.lit.value.str) + 1, arg.lit.value.str);
+                case VM_TAG_STRING: {
+                    return vm_tb_ptr_name(state, "<str>", arg.lit.value.string);
                 }
                 case VM_TAG_FFI: {
                     return vm_tb_ptr_name(state, "<ffi>", arg.lit.value.ffi);
@@ -159,12 +168,17 @@ TB_Node *vm_tb_func_read_arg(vm_tb_state_t *state, TB_Node **regs, vm_arg_t arg)
     }
 }
 
-static bool vm_tb_str_eq(const char *str1, const char *str2) {
-    return strcmp(str1, str2) == 0;
+static bool vm_tb_str_eq(vm_io_buffer_t *str1, vm_io_buffer_t *str2) {
+    return str1->len == str2->len && memcmp(str1->buf, str2->buf, str1->len) == 0;
 }
 
-static bool vm_tb_str_lt(const char *str1, const char *str2) {
-    return strcmp(str1, str2) < 0;
+static bool vm_tb_str_lt(vm_io_buffer_t *str1, vm_io_buffer_t *str2) {
+    size_t len = str1->len < str2->len ? str1->len : str2->len;
+    int res = memcmp(str1->buf, str2->buf, len);
+    if (res != 0) {
+        return res < 0;
+    }
+    return str1->len < str2->len;
 }
 
 void vm_tb_func_reset_pass(vm_block_t *block) {
@@ -656,7 +670,7 @@ TB_Node *vm_tb_func_body_once(vm_tb_state_t *state, TB_Node **regs, vm_block_t *
                     state->fun,
                     vm_tb_func_body_once(state, regs, branch.targets[0])
                 );
-            } else if (branch.tag == VM_TAG_STR) {
+            } else if (branch.tag == VM_TAG_STRING) {
                 TB_PrototypeParam params[2] = {
                     {TB_TYPE_PTR},
                     {TB_TYPE_PTR},
@@ -1340,57 +1354,11 @@ void vm_tb_func_report_error(vm_tb_state_t *state, const char *str) {
     tb_inst_ret(state->fun, 2, ret_vals);
 }
 
-void vm_tb_print(uint32_t tag, void *value) {
+void vm_tb_print(uint32_t tag, vm_value_t *value) {
     vm_std_value_t val = (vm_std_value_t){
         .tag = tag,
+        .value = value,
     };
-    val.value = *(vm_value_t *)value;
-    // switch (tag) {
-    //     case VM_TAG_I8: {
-    //         val.value.i8 = *(int8_t *)value;
-    //         break;
-    //     }
-    //     case VM_TAG_I16: {
-    //         val.value.i16 = *(int16_t *)value;
-    //         break;
-    //     }
-    //     case VM_TAG_I32: {
-    //         val.value.i32 = *(int32_t *)value;
-    //         break;
-    //     }
-    //     case VM_TAG_I64: {
-    //         val.value.i64 = *(int64_t *)value;
-    //         break;
-    //     }
-    //     case VM_TAG_F32: {
-    //         val.value.f32 = *(float *)value;
-    //         break;
-    //     }
-    //     case VM_TAG_F64: {
-    //         val.value.f64 = *(double *)value;
-    //         break;
-    //     }
-    //     case VM_TAG_STR: {
-    //         val.value.str = *(const char **)value;
-    //         break;
-    //     }
-    //     case VM_TAG_CLOSURE: {
-    //         val.value.closure = *(vm_std_value_t **)value;
-    //         break;
-    //     }
-    //     case VM_TAG_TAB: {
-    //         val.value.table = *(vm_table_t **)value;
-    //         break;
-    //     }
-    //     case VM_TAG_FFI: {
-    //         val.value.ffi = *(void (*)(vm_std_closure_t *closure, vm_std_value_t *))value;
-    //         break;
-    //     }
-    //     default: {
-    //         printf("bad tag: %zu\n", (size_t)tag);
-    //         exit(1);
-    //     }
-    // }
     vm_io_buffer_t buf = {0};
     vm_io_debug(&buf, 0, "debug: ", val, NULL);
     fprintf(stdout, "%.*s", (int)buf.len, buf.buf);
@@ -1462,60 +1430,36 @@ void *vm_tb_rfunc_comp(vm_rblock_t *rblock) {
 
     vm_tb_state_t *state = rblock->state;
 
-    if (state->config->use_ver_count >= VM_USE_VERSION_COUNT_GLOBAL) {
-        vm_table_t *vm_tab = vm_table_lookup(state->std, (vm_value_t) {.str = "vm"}, VM_TAG_STR)->val_val.table;
-        vm_table_t *vm_ver_tab = vm_table_lookup(vm_tab, (vm_value_t) {.str = "version"}, VM_TAG_STR)->val_val.table;
-        vm_pair_t *global_pair = vm_table_lookup(vm_ver_tab, (vm_value_t) {.str = "global"}, VM_TAG_STR);
-        int64_t global_count;
-        if (global_pair != NULL) {
-            vm_std_value_t global_val = (vm_std_value_t) {
-                .tag = global_pair->val_tag,
-                .value = global_pair->val_val,
-            };
-            global_count = vm_value_to_i64(global_val);
-        } else {
-            global_count = 0;
-        }
-        global_count += 1;
-        vm_tag_t tag;
-        vm_value_t res;
-        switch (state->config->use_num) {
-            case VM_USE_NUM_I8: {
-                tag = VM_TAG_I8;
-                res.i8 = global_count;
-                break;
-            }
-            case VM_USE_NUM_I16: {
-                tag = VM_TAG_I16;
-                res.i16 = global_count;
-                break;
-            }
-            case VM_USE_NUM_I32: {
-                tag = VM_TAG_I32;
-                res.i32 = global_count;
-                break;
-            }
-            case VM_USE_NUM_I64: {
-                tag = VM_TAG_I64;
-                res.i64 = global_count;
-                break;
-            }
-            case VM_USE_NUM_F32: {
-                tag = VM_TAG_F32;
-                res.f32 = global_count;
-                break;
-            }
-            case VM_USE_NUM_F64: {
-                tag = VM_TAG_F64;
-                res.f64 = global_count;
-                break;
-            }
-        }
-        vm_table_set(vm_ver_tab, (vm_value_t) {.str = "global"}, res, VM_TAG_STR, tag);
-    }
-
     vm_block_t *block_pre = vm_rblock_version(state->blocks, rblock);
     vm_block_t *block = vm_tb_handle_upvalues(block_pre);
+
+    if (state->config->use_ver_count >= VM_USE_VERSION_COUNT_GLOBAL) {
+        vm_table_t *vm_table = vm_table_get_value(state->std, vm_std_value_cstr("vm")).value.table;
+        vm_table_t *version_table = vm_table_get_value(vm_table, vm_std_value_cstr("version")).value.table;
+        vm_table_set_value(
+            version_table,
+            vm_std_value_cstr("global"),
+            vm_value_from_i64(
+                vm_tb_num_type_to_tag[state->config->use_num], 
+                1 + vm_value_to_i64(
+                    vm_table_get_value(version_table, vm_std_value_cstr("global"))
+                )
+            )
+        );
+        if (state->config->use_ver_count >= VM_USE_VERSION_COUNT_FINE) {
+            vm_table_set_value(
+                version_table,
+                vm_std_value_i32((int32_t) block->id),
+                vm_value_from_i64(
+                    vm_tb_num_type_to_tag[state->config->use_num], 
+                    1 + vm_value_to_i64(
+                        vm_table_get_value(version_table, vm_std_value_i32((int32_t) block->id))
+                    )
+                )
+            );
+        }
+    }
+
     state->fun  = tb_function_create(state->module, -1, "block", TB_LINKAGE_PRIVATE);
 
     if (block == NULL) {
@@ -1633,7 +1577,7 @@ void *vm_tb_rfunc_comp(vm_rblock_t *rblock) {
 #endif
     tb_pass_exit(passes);
 
-    TB_JIT *jit = tb_jit_begin(state->module, 1 << 16s);
+    TB_JIT *jit = tb_jit_begin(state->module, 1 << 16);
     void *ret = tb_jit_place_function(jit, state->fun);
 
     rblock->jit = ret;
@@ -1657,7 +1601,7 @@ typedef vm_std_value_t VM_CDECL vm_tb_func_t(void);
 vm_std_value_t vm_tb_run_main(vm_config_t *config, vm_block_t *entry, vm_blocks_t *blocks, vm_table_t *std) {
     vm_std_value_t val = vm_tb_run_repl(config, entry, blocks, std);
     if (val.tag == VM_TAG_ERROR) {
-        printf("error: %s\n", val.value.str);
+        printf("error: %s\n", val.value.buffer->buf);
     }
     return val;
 }
@@ -1667,6 +1611,23 @@ vm_std_value_t vm_tb_run_repl(vm_config_t *config, vm_block_t *entry, vm_blocks_
     state->std = std;
     state->config = config;
     state->blocks = blocks;
+    
+    if (state->config->use_ver_count >= VM_USE_VERSION_COUNT_FINE) {
+        vm_table_t *ver_tab = vm_table_get_value(
+            vm_table_get_value(
+                std,
+                vm_std_value_cstr("vm")
+            ).value.table,
+            vm_std_value_cstr("version")
+        ).value.table;
+        for (ptrdiff_t i = blocks->entry->id; i < blocks->len; i++) {
+            vm_table_set_value(
+                ver_tab,
+                vm_std_value_i64((int64_t) i),
+                vm_value_from_i64(vm_tb_num_type_to_tag[state->config->use_num], 0)
+            );
+        }
+    }
 
     vm_tb_new_module(state);
 

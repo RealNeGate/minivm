@@ -1,18 +1,16 @@
 
 #include "./io.h"
 
-#include "./util.h"
-
 void vm_io_buffer_vformat(vm_io_buffer_t *buf, char *fmt, va_list ap) {
     while (true) {
         int avail = buf->alloc - buf->len;
         va_list ap_copy;
         va_copy(ap_copy, ap);
-        int written = vsnprintf(&buf->buf[buf->len], avail, fmt, ap_copy);
+        int written = vsnprintf((char *) &buf->buf[buf->len], avail, fmt, ap_copy);
         va_end(ap_copy);
         if (avail <= written) {
             buf->alloc = buf->alloc * 2 + 16;
-            buf->buf = vm_realloc(buf->buf, sizeof(char) * buf->alloc);
+            buf->buf = vm_realloc(buf->buf, sizeof(uint8_t) * buf->alloc);
             continue;
         }
         buf->len += written;
@@ -25,6 +23,19 @@ void vm_io_buffer_format(vm_io_buffer_t *buf, char *fmt, ...) {
     va_start(ap, fmt);
     vm_io_buffer_vformat(buf, fmt, ap);
     va_end(ap);
+}
+
+vm_io_buffer_t *vm_io_buffer_from_str(size_t len, const uint8_t *str) {
+    vm_io_buffer_t *ret = vm_malloc(sizeof(vm_io_buffer_t));
+    ret->alloc = len;
+    ret->buf = vm_malloc(sizeof(uint8_t) * len);
+    ret->len = len;
+    memcpy(ret->buf, str, len);
+    return ret;
+}
+
+vm_io_buffer_t *vm_io_buffer_from_cstr(const char *str) {
+    return vm_io_buffer_from_str(strlen(str) + 1, str);
 }
 
 char *vm_io_vformat(char *fmt, va_list ap) {
@@ -111,8 +122,8 @@ void vm_io_print_lit(vm_io_buffer_t *out, vm_std_value_t value) {
             vm_io_buffer_format(out, "<function: %p>", value.value.ffi);
             break;
         }
-        case VM_TAG_STR: {
-            vm_io_buffer_format(out, "\"%s\"", value.value.str);
+        case VM_TAG_STRING: {
+            vm_io_buffer_format(out, "\"%.*s\"", (int) value.value.buffer->len, value.value.buffer->buf);
             break;
         }
     }
@@ -180,9 +191,9 @@ void vm_io_debug(vm_io_buffer_t *out, size_t indent, const char *prefix, vm_std_
             vm_io_buffer_format(out, VM_FORMAT_FLOAT "\n", value.value.f64);
             break;
         }
-        case VM_TAG_STR: {
+        case VM_TAG_STRING: {
             vm_indent(out, indent, prefix);
-            vm_io_buffer_format(out, "\"%s\"\n", value.value.str);
+            vm_io_buffer_format(out, "\"%.*s\"\n", (int) value.value.buffer->len, value.value.buffer->buf);
             break;
         }
         case VM_TAG_CLOSURE: {
@@ -289,13 +300,13 @@ void vm_io_debug(vm_io_buffer_t *out, size_t indent, const char *prefix, vm_std_
                         vm_io_debug(out, indent + 1, buf, val, &next);
                         break;
                     }
-                    case VM_TAG_STR: {
+                    case VM_TAG_STRING: {
                         vm_std_value_t val = (vm_std_value_t){
                             .tag = p.val_tag,
                             .value = p.val_val,
                         };
                         char buf[64];
-                        snprintf(buf, 63, "%s = ", p.key_val.str);
+                        snprintf(buf, 63, "%s = ", p.key_val.buffer->buf);
                         vm_io_debug(out, indent + 1, buf, val, &next);
                         break;
                     }

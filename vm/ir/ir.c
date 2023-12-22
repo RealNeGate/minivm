@@ -16,7 +16,7 @@ void vm_io_format_arg(vm_io_buffer_t *out, vm_arg_t val) {
     switch (val.type) {
         case VM_ARG_LIT: {
             vm_io_print_lit(out, val.lit);
-            if (val.lit.tag != VM_TAG_NIL && val.lit.tag != VM_TAG_STR && val.lit.tag != VM_TAG_FFI && val.lit.tag != VM_TAG_BOOL) {
+            if (val.lit.tag != VM_TAG_NIL && val.lit.tag != VM_TAG_STRING && val.lit.tag != VM_TAG_FFI && val.lit.tag != VM_TAG_BOOL) {
                 vm_io_format_tag(out, val.lit.tag);
             }
             break;
@@ -82,7 +82,7 @@ void vm_io_format_tag(vm_io_buffer_t *out, vm_tag_t tag) {
             vm_io_buffer_format(out, "f64");
             break;
         }
-        case VM_TAG_STR: {
+        case VM_TAG_STRING: {
             vm_io_buffer_format(out, "str");
             break;
         }

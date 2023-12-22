@@ -3,7 +3,6 @@
 #include "../vm/ast/print.h"
 #include "../vm/backend/tb.h"
 #include "../vm/ir/ir.h"
-#include "../vm/std/util.h"
 #include "../vm/std/io.h"
 #include "../vm/std/std.h"
 #include "../vm/config.h"
@@ -33,7 +32,7 @@ int main(int argc, char **argv) {
             break;
         }
         if (!strcmp(arg, "--opt")) {
-            config->use_tb_opt = true;
+        config->use_tb_opt = true;
         } else if (!strcmp(arg, "--no-opt")) {
             config->use_tb_opt = false;
         } else if (!strcmp(arg, "--ver-count=none")) {
@@ -73,30 +72,35 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "cannot use have as a number type: %s\n", arg);
                 return 1;
             }
-        } else if (!strncmp(arg, "--dump-", 7) || !strncmp(arg, "--dump=", 7)) {
-            arg += 7;
+        } else if (!strncmp(arg, "--dump-", 7) || !strncmp(arg, "--dump=", 7) || !strncmp(arg, "--no-dump-", 7) || !strncmp(arg, "--no-dump=", 7)) {
+            bool on = !strncmp(arg, "--dump-", 7) || !strncmp(arg, "--dump=", 7);
+            if (on) {
+                arg += 7;
+            } else {
+                arg += 10;
+            }
             if (!strcmp(arg, "src")) {
-                config->dump_src = true;
+                config->dump_src = on;
             } else if (!strcmp(arg, "ast")) {
-                config->dump_ast = true;
+                config->dump_ast = on;
             } else if (!strcmp(arg, "ir")) {
-                config->dump_ir = true;
+                config->dump_ir = on;
             } else if (!strcmp(arg, "ver")) {
-                config->dump_ver = true;
+                config->dump_ver = on;
             } else if (!strcmp(arg, "tb")) {
-                config->dump_tb = true;
+                config->dump_tb = on;
             } else if (!strcmp(arg, "opt")) {
-                config->dump_tb_opt = true;
+                config->dump_tb_opt = on;
             } else if (!strcmp(arg, "tb-dot")) {
-                config->dump_tb_dot = true;
+                config->dump_tb_dot = on;
             } else if (!strcmp(arg, "opt-dot")) {
-                config->dump_tb_opt_dot = true;
+                config->dump_tb_opt_dot = on;
             } else if (!strcmp(arg, "x86")) {
-                config->dump_x86 = true;
+                config->dump_x86 = on;
             } else if (!strcmp(arg, "args")) {
-                config->dump_args = true;
+                config->dump_args = on;
             } else if (!strcmp(arg, "time")) {
-                config->dump_time = true;
+                config->dump_time = on;
             } else {
                 fprintf(stderr, "cannot dump: %s\n", arg);
                 return 1;
